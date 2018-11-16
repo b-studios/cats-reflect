@@ -1,12 +1,13 @@
 package cats
 
 import scala.annotation.implicitNotFound
+import language.postfixOps
 
 package object reflect {
 
   type in[A, M[_]] = implicit Reflect[M] => A
 
-  @implicitNotFound("This expression requires the capability to reify ${M}\nbut cannot find Reflect[${M}] in the current scope.\n\nMaybe you forgot to wrap this expression in a call to:\n    reify [${M}] in { EXPR }")
+  @implicitNotFound("This expression requires the capability to reflect ${M}\nbut cannot find Reflect[${M}] in the current scope.\n\nMaybe you forgot to wrap this expression in a call to:\n    reify [${M}] in { EXPR }")
   sealed trait Reflect[M[_]] {
     def apply[R](mr: M[R]): R
   }
