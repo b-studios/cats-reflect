@@ -3,6 +3,8 @@ Cats Reflect
 This project provides support for monadic reflection (Filinski [1994](https://dl.acm.org/citation.cfm?id=178047), [2010](https://dl.acm.org/citation.cfm?id=1706354))
 to integrate monadic code with direct style code.
 
+The implementation makes use of [`cats/StackSafeMonad.tailRecM`](https://github.com/typelevel/cats/blob/master/core/src/main/scala/cats/StackSafeMonad.scala) for stack safety. That is, for the user program to be stack safe all reflected monads have to override `tailRecM` in a stack safe way.
+
 Usage
 -----
 We collected some [examples](src/main/scala/cats/reflect/examples.scala) of how to use cats-reflect.
