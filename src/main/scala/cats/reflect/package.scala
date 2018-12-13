@@ -58,19 +58,20 @@ package object reflect {
       M.pure(prog)
     })
 
-    def run(): M[R] = {
-
-      if (coroutine.isDone) {
-        return coroutine.result
-      }
-
-      M.flatMap(coroutine.value)(x => {
-        coroutine.resume(x)
-        run()
-      })
+    def step(x: X): Either[M[X], M[R]] = {
+      coroutine.resume(x)
+      if (coroutine.isDone)
+        Right(coroutine.result)
+      else
+        Left(coroutine.value)
     }
+
+    def run(): M[R] =
+      if (coroutine.isDone)
+        coroutine.result
+      else
+        M.flatten(M.tailRecM(coroutine.value) { mx => M.map(mx) { step }})
 
     run()
   }
-
 }
