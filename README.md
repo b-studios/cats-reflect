@@ -40,10 +40,14 @@ make images
 Finally, run sbt with the newly built JVM. Assuming you checked out
 loom into `PATH` and built on a mac, run:
 ```
-sbt -java-home $PATH/build/macosx-x86_64-normal-server-release/images/jdk
+sbt -java-home $PATH/build/macosx-x86_64-server-release/images/jdk
 ```
-
 Obviously the path needs to be adjusted for other operating systems.
+
+Some performance optimizations of project loom can be enabled by
+```
+-XX:-DetectLocksInCompiledFrames -XX:+UnlockDiagnosticVMOptions -XX:+UnlockExperimentalVMOptions -XX:+UseNewCode
+```
 
 ## Libraries
 The implementation uses [cats-core](https://typelevel.org/cats) for its [Monad](https://typelevel.org/cats/typeclasses/monad.html) typeclass.
