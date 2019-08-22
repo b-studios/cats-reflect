@@ -4,18 +4,11 @@ import scala.annotation.implicitNotFound
 
 package object reflect {
 
-  type in[A, M[_]] = implicit Reflect[M] => A
+  type in[A, M[_]] = given Reflect[M] => A
 
   @implicitNotFound("This expression requires the capability to reify ${M}\nbut cannot find Reflect[${M}] in the current scope.\n\nMaybe you forgot to wrap this expression in a call to:\n    reify [${M}] in { EXPR }")
   sealed trait Reflect[M[_]] {
-    def apply[R](mr: M[R]): R
-  }
-  def reflect[M[_]: Reflect, R](mr: M[R]): R =
-    implicitly[Reflect[M]].apply(mr)
-
-  // for EXPR.reflect syntax
-  implicit class ReflectOps[M[_], A](ma: M[A])(implicit r: Reflect[M]) {
-    def reflect: A = r(ma)
+    def (mr: M[R]) reflect[R](): R
   }
 
   /**
@@ -28,7 +21,7 @@ package object reflect {
   def reify[M[_]: Monad]: ReifyBuilder[M] = ReifyBuilder()
 
   case class ReifyBuilder[M[_]: Monad]() {
-    def in[R](prog: R in M) = reify[M, R](implicit r => prog(r))
+    def in[R](prog: R in M) = reify[M, R] { prog }
   }
 
 
@@ -40,7 +33,7 @@ package object reflect {
   //   - no type inference on M
   // The latter might be a good thing since we want to make explicit
   // which monad we are reifying.
-  private def reify[M[_], R](prog: R in M)(implicit M: Monad[M]): M[R] = {
+  private def reify[M[_], R](prog: R in M) given (M: Monad[M]): M[R] = {
     import internal._
 
     type X
@@ -49,13 +42,13 @@ package object reflect {
     // with a monadic value
     val coroutine = new Coroutine[M[X], X, M[R]](prompt => {
       // capability to reflect M
-      implicit object reflect extends Reflect[M] {
-        def apply[R](mr: M[R]): R =
+      object reflect extends Reflect[M] {
+        def (mr: M[R]) reflect[R](): R =
           // since we know the receiver of this suspend is the
           // call to flatMap, the casts are safe
           prompt.suspend(mr.asInstanceOf[M[X]]).asInstanceOf[R]
       }
-      M.pure(prog)
+      M.pure(prog given reflect)
     })
 
     def step(x: X): Either[M[X], M[R]] = {

@@ -8,10 +8,8 @@ package object examples extends App {
   type IntReader[A] = Reader[Int, A]
   type IntWriter[A] = Writer[Int, A]
 
-  def read(): Int in IntReader = Reader[Int, Int] { n => n }.reflect
-
-  def write(n: Int): implicit Reflect[IntWriter] => Unit =
-    implicit r => Writer.tell(n).reflect
+  def read(): Int in IntReader = Reader[Int, Int] { n => n }.reflect()
+  def write(n: Int): Unit in IntWriter = Writer.tell(n).reflect()
 
   val res: IntReader[Int] = reify [IntReader] in {
     read() + read() + read()
@@ -32,11 +30,11 @@ package object examples extends App {
   def locally[R](n: Int)(prog: => R in IntReader): R =
     reify [IntReader] in { prog } run n
 
-  val resBoth: IntReader[IntWriter[Unit]] = reify [IntReader] in { implicit reader =>
-    reify [IntWriter] in { implicit writer =>
-      write(read()(reader))(writer) // +1
+  val resBoth: IntReader[IntWriter[Unit]] = reify [IntReader] in {
+    reify [IntWriter] in {
+      write(read()) // +1
 
-      Writer(4, ()).reflect
+      Writer(4, ()).reflect()
 
       // locally(read() + 2) { write(read()) } // +3
       write(read()) // +1
@@ -50,7 +48,7 @@ package object examples extends App {
   // translated to use cats-reflect
   import cats.effect.IO
 
-  val ioa: Unit in IO = IO { println("hey!") }.reflect
+  val ioa: Unit in IO = IO { println("hey!") }.reflect()
 
   val program: Unit in IO = {
     ioa
@@ -63,7 +61,7 @@ package object examples extends App {
 
   // cats effect IO trampolining works:
   def fib(n: Int, a: Long = 0, b: Long = 1): Long in IO = {
-    val b2 = IO(a + b).reflect
+    val b2 = IO(a + b).reflect()
 
     if (n > 0)
       fib(n - 1, b, b2)
@@ -72,10 +70,10 @@ package object examples extends App {
   }
 
   def fib2(n: Int, a: Long = 0, b: Long = 1): IO[Long] = reify [IO] in {
-    val b2 = IO(a + b).reflect
+    val b2 = IO(a + b).reflect()
 
     if (n > 0)
-      fib2(n - 1, b, b2).reflect
+      fib2(n - 1, b, b2).reflect()
     else
       b2
   }
