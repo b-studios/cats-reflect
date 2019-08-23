@@ -18,10 +18,10 @@ package object effekt {
 
   trait Effect[R] {
     def unary_! : R = {
-      if (currentHandler.value == null) {
+      if (currentPrompt.value == null) {
         sys error s"Unhandled operation ${this}"
       }
-      currentHandler.value.send(this)
+      currentPrompt.value.send(this)
     }
   }
 
@@ -46,37 +46,39 @@ package object effekt {
 
   case class HandleApi[R, Res](prog: () => R, unit: R => Res) {
     def returning[S](f: Res => S) = HandleApi(prog, unit andThen f)
-    def using(h: Handler[Res]): Res = new Handle[R, Res](unit, h, prog).run()
+    def using(h: Handler[Res]): Res = new Reset[R, Res](unit, h, prog).run()
   }
 
 
   // IMPLEMENTATION DETAILS
   // ======================
 
-  private[effekt] case class Bind[X, R](o: Effect[X], k: X => R) extends Clause[R]
+  private case class Bind[X, R](o: Effect[X], k: X => R) extends Clause[R]
 
   private object channel {
     private val data = new ThreadLocal[Any]
     def send(v: Any) = data.set(v)
     def receive[A](): A = data.get.asInstanceOf[A]
   }
-  private val currentHandler = new DynamicVariable[Handle[_, _]](null)
+  private val currentPrompt = new DynamicVariable[Prompt](null)
 
-  private[effekt] class Handle[R, Res](unit: R => Res, h: Handler[Res], prog: () => R) {
-
+  private class Prompt extends ContinuationScope("Prompt") {
     def send[X](op: Effect[X]): X = {
-      channel.send(Bind(op, x => { channel.send(x); run() }))
-      Continuation `yield` prompt
-      channel.receive() // obtain result
+      channel.send(op)
+      Continuation `yield` this
+      channel.receive()
     }
+  }
 
-    private object prompt extends ContinuationScope("Handle")
+  private class Reset[R, Res](unit: R => Res, h: Handler[Res], prog: () => R) {
+
+    private object prompt extends Prompt
 
     private lazy val co = new Continuation(prompt, () => channel.send(prog()))
 
     // The coroutine keeps sending op until it completes
     def run(): Res = {
-      currentHandler.withValue(this) {
+      currentPrompt.withValue(prompt) {
         co.run()
       }
 
@@ -84,7 +86,7 @@ package object effekt {
         return unit(channel.receive())
       }
 
-      channel.receive[Bind[_, Res]]() match {
+      Bind(channel.receive(), x => { channel.send(x); run() }) match {
         case c if h.isDefinedAt(c) => h(c)
         case Bind(op, k) => k(!op) // forward
       }
