@@ -11,7 +11,12 @@ import scala.util.DynamicVariable
 //       Also we need to reinstantiate the handler in the continuation, that's
 //       tricky if it is not part of the call to `handle`.
 //
-// - [ ] Make implementation stack safe
+// - [ ] Make implementation stack safe (at least for tail calls)
+//       Does it help to start with cats-reflect and then reify the free(er) monad?
+//       A handler would reify, match and reflect again.
+//
+//       If we start trampolining with a user-level stack, then we also need to
+//       reconsider the search for the correct handler.
 
 package object effekt {
 
@@ -70,7 +75,7 @@ package object effekt {
     h: Handler[Res],
     prog: () => R) extends Continuation(prompt, () => channel.send(prog())) with (Any => Res) {
 
-    def apply(x: Any): Res = { channel.send(x); exec() }
+    def apply(x: Any): Res = { channel.send(x); exec() } // (3) TODO STACK SAFETY
 
     @tailrec
     private[effekt] final def exec(): Res = {
@@ -81,7 +86,7 @@ package object effekt {
       }
 
       Bind(channel.receive(), this) match {
-        case c if h.isDefinedAt(c) => h(c)
+        case c if h.isDefinedAt(c) => h(c) // (1) TODO STACK SAFETY
         case Bind(op, k) => !op; exec() // forward
       }
     }
@@ -155,7 +160,7 @@ object test extends App {
     def runStateful[R](init: S)(prog: => R) = {
       var state = init
       handle { prog } using {
-        case Get -> k => k(state)
+        case Get -> k => k(state) // (2) TODO STACK SAFETY
         case Put(s) -> k => state = s; k(())
       }
     }
