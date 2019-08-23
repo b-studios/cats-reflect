@@ -47,7 +47,7 @@ package object effekt {
 
   case class HandleApi[R, Res](prog: () => R, unit: R => Res) {
     def returning[S](f: Res => S) = HandleApi(prog, unit andThen f)
-    def using(h: Handler[Res]): Res = new Reset[R, Res](unit, h, prog).run()
+    def using(h: Handler[Res]): Res = new Reset[R, Res](unit, h, prog).exec()
   }
 
 
@@ -65,21 +65,24 @@ package object effekt {
   // we only need one prompt since loom already does the nesting for us
   private object prompt extends ContinuationScope("Prompt")
 
-  private class Reset[R, Res](unit: R => Res, h: Handler[Res], prog: () => R) {
+  private class Reset[R, Res](
+    unit: R => Res,
+    h: Handler[Res],
+    prog: () => R) extends Continuation(prompt, () => channel.send(prog())) with (Any => Res) {
 
-    private lazy val co = new Continuation(prompt, () => channel.send(prog()))
+    def apply(x: Any): Res = { channel.send(x); exec() }
 
-    // The coroutine keeps sending op until it completes
-    def run(): Res = {
-      co.run()
+    @tailrec
+    private[effekt] final def exec(): Res = {
+      run()
 
-      if (co.isDone()) {
+      if (isDone()) {
         return unit(channel.receive())
       }
 
-      Bind(channel.receive(), x => { channel.send(x); run() }) match {
+      Bind(channel.receive(), this) match {
         case c if h.isDefinedAt(c) => h(c)
-        case Bind(op, k) => k(!op) // forward
+        case Bind(op, k) => !op; exec() // forward
       }
     }
   }
