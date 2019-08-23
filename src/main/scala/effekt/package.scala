@@ -5,9 +5,11 @@ import scala.util.DynamicVariable
 
 // TODO
 // - [ ] Explore exceptions to improve public API as
-//         try { } catch { case Op(n) -> k => ??? }
+//         try handle { } catch { case Op(n) -> k => ??? }
 //       but then we also need to incorporate return clauses as operations.
-//       How to type check that?
+//       How to type-check that?
+//       Also we need to reinstantiate the handler in the continuation, that's
+//       tricky if it is not part of the call to `handle`.
 //
 // - [ ] Make implementation stack safe
 
@@ -102,7 +104,7 @@ object test extends App {
 
   val r1 = handle {
     handle {
-      var x = 100
+      var x = 10
       !Get
       while (x > 0) {
         !Out(x)
@@ -157,6 +159,14 @@ object test extends App {
       case Get -> k    => s => k(s)(s)
       case Put(s) -> k => _ => k(())(s)
     })(prog)(init)
+
+    def runStateful[R](init: S)(prog: => R) = {
+      var state = init
+      handle { prog } using {
+        case Get -> k => k(state)
+        case Put(s) -> k => state = s; k(())
+      }
+    }
   }
 
   object S1 extends State[Int]
@@ -235,4 +245,10 @@ object test extends App {
   }
 
   runBoth { step(channel("a"), 3) } { step(channel("b"), 3) }
+
+  S1.runStateful(100) {
+    while (S1.get() > 0) {
+      S1.put(S1.get() - 1)
+    }
+  }
 }
