@@ -20,10 +20,9 @@ package object effekt {
 
   trait Effect[R] {
     def unary_! : R = {
-      if (currentPrompt.value == null) {
-        sys error s"Unhandled operation ${this}"
-      }
-      currentPrompt.value.send(this)
+      channel.send(this)
+      Continuation `yield` prompt
+      channel.receive()
     }
   }
 
@@ -62,27 +61,17 @@ package object effekt {
     def send(v: Any) = data.set(v)
     def receive[A](): A = data.get.asInstanceOf[A]
   }
-  private val currentPrompt = new DynamicVariable[Prompt](null)
 
-  private class Prompt extends ContinuationScope("Prompt") {
-    def send[X](op: Effect[X]): X = {
-      channel.send(op)
-      Continuation `yield` this
-      channel.receive()
-    }
-  }
+  // we only need one prompt since loom already does the nesting for us
+  private object prompt extends ContinuationScope("Prompt")
 
   private class Reset[R, Res](unit: R => Res, h: Handler[Res], prog: () => R) {
-
-    private object prompt extends Prompt
 
     private lazy val co = new Continuation(prompt, () => channel.send(prog()))
 
     // The coroutine keeps sending op until it completes
     def run(): Res = {
-      currentPrompt.withValue(prompt) {
-        co.run()
-      }
+      co.run()
 
       if (co.isDone()) {
         return unit(channel.receive())
