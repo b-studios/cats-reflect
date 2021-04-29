@@ -8,8 +8,8 @@ package object examples extends App {
   type IntReader[A] = Reader[Int, A]
   type IntWriter[A] = Writer[Int, A]
 
-  def read(): Int in IntReader = Reader[Int, Int] { n => n }.reflect()
-  def write(n: Int): Unit in IntWriter = Writer.tell(n).reflect()
+  def read(): Int in IntReader = Reader[Int, Int] { n => n }.reflect
+  def write(n: Int): Unit in IntWriter = Writer.tell(n).reflect
 
   val res: IntReader[Int] = reify [IntReader] in {
     read() + read() + read()
@@ -34,7 +34,7 @@ package object examples extends App {
     reify [IntWriter] in {
       write(read()) // +1
 
-      Writer(4, ()).reflect()
+      Writer(4, ()).reflect
 
       // locally(read() + 2) { write(read()) } // +3
       write(read()) // +1
@@ -47,10 +47,11 @@ package object examples extends App {
   // examples from https://typelevel.org/cats-effect/datatypes/io.html
   // translated to use cats-reflect
   import cats.effect.IO
+  import cats.effect.unsafe.implicits.global
 
-  val ioa: Unit in IO = IO { println("hey!") }.reflect()
+  def ioa: Unit in IO = IO { println("hey!") }.reflect
 
-  val program: Unit in IO = {
+  def program: Unit in IO = {
     ioa
     ioa
   }
@@ -61,7 +62,7 @@ package object examples extends App {
 
   // cats effect IO trampolining works:
   def fib(n: Int, a: Long = 0, b: Long = 1): Long in IO = {
-    val b2 = IO(a + b).reflect()
+    val b2 = IO(a + b).reflect
 
     if (n > 0)
       fib(n - 1, b, b2)
@@ -70,16 +71,16 @@ package object examples extends App {
   }
 
   def fib2(n: Int, a: Long = 0, b: Long = 1): IO[Long] = reify [IO] in {
-    val b2 = IO(a + b).reflect()
+    val b2 = IO(a + b).reflect
 
     if (n > 0)
-      fib2(n - 1, b, b2).reflect()
+      fib2(n - 1, b, b2).reflect
     else
       b2
   }
 
   println("\nFib Example:")
   println {
-    (reify [IO] in { fib(100000) }).unsafeRunSync()
+    (reify [IO] in { fib(6) }).unsafeRunSync()
   }
 }
