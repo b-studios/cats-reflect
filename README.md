@@ -20,14 +20,19 @@ To implement monadic reflection we require some implementation of
 (delimited) continuations. At the moment, cats-reflect only runs on
 a JVM branch called [project loom](http://cr.openjdk.java.net/~rpressler/loom/Loom-Proposal.html) with runtime support for coroutines / delimited continuations.
 
+### Download a Loom-enabled JDK
+There are early-access builds available at <https://jdk.java.net/loom/>.
+
+### Build Loom
+
 To build the custom JVM, clone the repository
 ```
-hg clone http://hg.openjdk.java.net/loom/loom
+git clone https://github.com/openjdk/loom
 ```
 
 and checkout the continuation branch `cont`:
 ```
-hg checkout cont
+git checkout fibers
 ```
 
 Detailed instructions on how to build the JDK can be found in the
@@ -36,6 +41,8 @@ file `doc/building.md`, in short those are:
 bash configure
 make images
 ```
+
+### Run Sbt
 
 Finally, run sbt with the newly built JVM. Assuming you checked out
 loom into `PATH` and built on a mac, run:

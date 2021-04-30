@@ -65,10 +65,8 @@ package object reflect {
     def run(): M[R] =
       if (coroutine.isDone)
         coroutine.result
-      else {
-        println("flatten!")
+      else
         M.flatten(M.tailRecM(coroutine.value) { mx => M.map(mx) { step }})
-      }
 
     run()
   }

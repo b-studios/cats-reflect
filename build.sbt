@@ -9,4 +9,9 @@ lazy val root = project
     ),
     version := "0.1.0-SNAPSHOT",
     scalaVersion := "3.0.0-RC3"
+    // javaOptions ++= Seq(
+    //   "-XX:-DetectLocksInCompiledFrames",
+    //   "-XX:+UnlockDiagnosticVMOptions",
+    //   "-XX:+UnlockExperimentalVMOptions",
+    //   "-XX:+UseNewCode")
   )
