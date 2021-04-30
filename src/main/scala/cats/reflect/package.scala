@@ -21,9 +21,9 @@ package object reflect {
    *
    * @usecase def reify[M[_]: Monad] in[R](prog: => R): M[R]
    */
-  inline def reify[M[_]: Monad]: ReifyBuilder[M] = ReifyBuilder()
+  inline def reify[M[_]: Runner]: ReifyBuilder[M] = ReifyBuilder()
 
-  case class ReifyBuilder[M[_]: Monad]() {
+  case class ReifyBuilder[M[_]: Runner]() {
     inline def in[R](prog: R in M) = reify[M, R] { prog }
   }
 
@@ -36,7 +36,7 @@ package object reflect {
   //   - no type inference on M
   // The latter might be a good thing since we want to make explicit
   // which monad we are reifying.
-  private def reify[M[_], R](prog: R in M)(using M: Monad[M]): M[R] = {
+  private def reify[M[_], R](prog: R in M)(using M: Runner[M]): M[R] = {
     import internal._
 
     type X
@@ -66,8 +66,16 @@ package object reflect {
       if (coroutine.isDone)
         coroutine.result
       else
-        M.flatten(M.tailRecM(coroutine.value) { mx => M.map(mx) { step }})
+        // (M[X] => Either[M[X], M[R]]) => M[R]
+        M.tailRecM(coroutine.value)(step)
 
     run()
   }
+
+
+  // if we have a cats monad, we can construct a runner
+  given [M[_]](using M: Monad[M]): Runner[M] with
+    def pure[A](a: A) = M.pure(a)
+    def tailRecM[X, R](init: M[X])(f: X => Either[M[X], M[R]]): M[R] =
+        M.flatten(M.tailRecM(init) { mx => M.map(mx)(f) })
 }
