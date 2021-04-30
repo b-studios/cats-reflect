@@ -229,9 +229,9 @@ object RateLimiter extends IOApp.Simple {
   val myData : List[Int] = (1 to 30).toList
 
   def process: List[String] in IO = {
-    IO { println("Starting to process!") }.reflect
+    println("Starting to process!")
     val sem = Semaphore[IO](10).reflect
-    val limited = rateLimitedDirectStyle(sem, n => IO { println(s"hey! ${n}"); n.toString }.reflect)
+    val limited = rateLimitedDirectStyle(sem, n => { println(s"hey! ${n}"); n.toString })
     // here we need to locally reify, since parTraverse has type:
     //   def parTraverse[A](as: List[A])(f: A => IO[B]): IO[List[B]]
     myData.parTraverse(n => reify[IO] in { limited(n) }).reflect
