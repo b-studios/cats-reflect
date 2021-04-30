@@ -6,13 +6,13 @@ package object reflect {
 
   type in[A, M[_]] = Reflect[M] ?=> A
 
-  @implicitNotFound("This expression requires the capability to reify ${M}\nbut cannot find Reflect[${M}] in the current scope.\n\nMaybe you forgot to wrap this expression in a call to:\n    reify [${M}] in { EXPR }")
+  @implicitNotFound("This expression requires the capability for ${M}\nbut cannot find Reflect[${M}] in the current scope.\n\nMaybe you forgot to wrap this expression in a call to:\n    reify [${M}] in { EXPR }")
   sealed trait Reflect[M[_]] {
     def reflect[R](mr: M[R]): R
   }
 
   extension [M[_], R](mr: M[R])
-    def reflect(using r: Reflect[M]): R = r.reflect(mr)
+    inline def reflect(using r: Reflect[M]): R = r.reflect(mr)
 
   /**
    * for partially applying type arguments and better type inference
@@ -21,10 +21,10 @@ package object reflect {
    *
    * @usecase def reify[M[_]: Monad] in[R](prog: => R): M[R]
    */
-  def reify[M[_]: Monad]: ReifyBuilder[M] = ReifyBuilder()
+  inline def reify[M[_]: Monad]: ReifyBuilder[M] = ReifyBuilder()
 
   case class ReifyBuilder[M[_]: Monad]() {
-    def in[R](prog: R in M) = reify[M, R] { prog }
+    inline def in[R](prog: R in M) = reify[M, R] { prog }
   }
 
 
@@ -65,8 +65,10 @@ package object reflect {
     def run(): M[R] =
       if (coroutine.isDone)
         coroutine.result
-      else
+      else {
+        println("flatten!")
         M.flatten(M.tailRecM(coroutine.value) { mx => M.map(mx) { step }})
+      }
 
     run()
   }

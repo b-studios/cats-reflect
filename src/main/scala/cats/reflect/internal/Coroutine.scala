@@ -8,10 +8,13 @@ trait Prompt[S, R] {
 
 class Coroutine[S, R, T](prog: Prompt[S, R] => T) {
 
+  // to disable asserts
+  inline def check(inline b: Boolean): Unit = ()
+
   def isDone = co.isDone
-  def value: S = { assert(!isDone); receive() }
-  def result: T = { assert(isDone); receive() }
-  def resume(v: R): Unit = { assert(!isDone); send(v); co.run() }
+  def value: S = { check(!isDone); receive() }
+  def result: T = { check(isDone); receive() }
+  def resume(v: R): Unit = { check(!isDone); send(v); co.run() }
 
   private var channel: Any = null
   private def send(v: Any) = channel = v

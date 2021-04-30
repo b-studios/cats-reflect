@@ -83,4 +83,110 @@ package object examples extends App {
   println {
     (reify [IO] in { fib(6) }).unsafeRunSync()
   }
+
+  def countDownBaseline(n: Int): Long = {
+    val b2 = n + n
+
+    if (n > 0)
+      countDownBaseline(n - 1)
+    else
+      b2
+  }
+
+  def countDownReflect(n: Int): Long in IO = {
+    val b2 = IO(n + n).reflect
+
+    if (n > 0)
+      countDownReflect(n - 1)
+    else
+      b2
+  }
+
+  import cats.{ Monad, Id }
+  import cats.catsInstancesForId
+  // import cats.implicits._
+
+  def countDownReflectId(n: Int): Long in Id = {
+    val b2 = Monad[Id].pure(n + n).reflect
+
+    if (n > 0)
+      countDownReflectId(n - 1)
+    else
+      b2
+  }
+
+  def countDownReify(n: Int): IO[Long] = reify [IO] in {
+    val b2 = IO(n + n).reflect
+
+    if (n > 0)
+      countDownReify(n - 1).reflect
+    else
+      b2
+  }
+
+  // some very preliminary benchmarks
+  def timed(block: => Unit): Long = {
+    val before = System.currentTimeMillis()
+    block
+    val after = System.currentTimeMillis()
+    println(s"took ${after - before}ms")
+    after - before
+  }
+
+  // this is a quick measurement of .reflect
+  println("\nCountdown Reflect Example:")
+  println {
+    val N = 1000000
+    println("--- IO ---")
+    timed { (reify[IO] in { countDownReflect(N) }).unsafeRunSync() }
+    timed { (reify[IO] in { countDownReflect(N) }).unsafeRunSync() }
+    timed { (reify[IO] in { countDownReflect(N) }).unsafeRunSync() }
+    timed { (reify[IO] in { countDownReflect(N) }).unsafeRunSync() }
+    timed { (reify[IO] in { countDownReflect(N) }).unsafeRunSync() }
+    timed { (reify[IO] in { countDownReflect(N) }).unsafeRunSync() }
+    timed { (reify[IO] in { countDownReflect(N) }).unsafeRunSync() }
+    timed { (reify[IO] in { countDownReflect(N) }).unsafeRunSync() }
+    timed { (reify[IO] in { countDownReflect(N) }).unsafeRunSync() }
+
+    println("--- Id ---")
+    timed { (reify[Id] in { countDownReflectId(N) }) }
+    timed { (reify[Id] in { countDownReflectId(N) }) }
+    timed { (reify[Id] in { countDownReflectId(N) }) }
+    timed { (reify[Id] in { countDownReflectId(N) }) }
+    timed { (reify[Id] in { countDownReflectId(N) }) }
+    timed { (reify[Id] in { countDownReflectId(N) }) }
+    timed { (reify[Id] in { countDownReflectId(N) }) }
+    timed { (reify[Id] in { countDownReflectId(N) }) }
+    timed { (reify[Id] in { countDownReflectId(N) }) }
+
+    println("--- Nested ---")
+    // it looks like reflect is linear in the number of intermediate delimiters...
+    inline def nested = (reify [Id] in { 
+        (reify [IO] in { 
+          reify [List] in { 
+            reify [IntWriter] in { 
+              (reify [IntReader] in { 
+                countDownReflectId(N) 
+              }).run(0)
+            }
+          }
+        }).unsafeRunSync() 
+      })
+    timed { nested }
+    timed { nested }
+    timed { nested }
+    timed { nested }
+    timed { nested }
+    timed { nested }
+    timed { nested }
+
+
+    println("--- Baseline ---")
+
+    // obviously, this can aggressivly be optimized...
+    timed { countDownBaseline(N) }
+    timed { countDownBaseline(N) }
+    timed { countDownBaseline(N) }
+    timed { countDownBaseline(N) }
+  }
 }
