@@ -195,6 +195,39 @@ package object examples extends App {
 
 import cats.effect.{IO, IOApp}
 
+object IOExamples extends App {
+
+  import cats.effect.FiberIO
+  import cats.effect.unsafe.implicits.global
+  import scala.concurrent.duration._
+
+  object IO extends RunnerOps[IO] {
+    def sleep(delay: FiniteDuration): Unit in IO =
+      cats.effect.IO.sleep(delay).reflect
+
+    def start[R](prog: R in IO): FiberIO[R] in IO = 
+      IO { prog }.start.reflect
+  }
+
+  extension [R](fiber: FiberIO[R])
+    def join(): Unit in IO = fiber.join.reflect  
+
+  // computation stays computation, no need to wrap into IO
+  def sayHello() = println("Hello")
+
+  def ex1 = { sayHello(); sayHello(); sayHello() }
+
+  def ex2(): Unit in IO = {
+      sayHello()
+      val fiber = IO.start { IO.sleep(1.second) }
+      fiber.join()
+      sayHello()
+  }
+
+  IO { ex2() }.unsafeRunSync()
+
+}
+
 object RateLimiter extends IOApp.Simple {
 
   // Rate limiting example from 
