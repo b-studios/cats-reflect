@@ -1,5 +1,7 @@
 package cats.reflect
 
+import java.util.concurrent.Semaphore
+
 package object examples extends App {
 
   import cats.data._
@@ -135,58 +137,105 @@ package object examples extends App {
 
   // this is a quick measurement of .reflect
   println("\nCountdown Reflect Example:")
-  println {
-    val N = 1000000
-    println("--- IO ---")
-    timed { (reify[IO] in { countDownReflect(N) }).unsafeRunSync() }
-    timed { (reify[IO] in { countDownReflect(N) }).unsafeRunSync() }
-    timed { (reify[IO] in { countDownReflect(N) }).unsafeRunSync() }
-    timed { (reify[IO] in { countDownReflect(N) }).unsafeRunSync() }
-    timed { (reify[IO] in { countDownReflect(N) }).unsafeRunSync() }
-    timed { (reify[IO] in { countDownReflect(N) }).unsafeRunSync() }
-    timed { (reify[IO] in { countDownReflect(N) }).unsafeRunSync() }
-    timed { (reify[IO] in { countDownReflect(N) }).unsafeRunSync() }
-    timed { (reify[IO] in { countDownReflect(N) }).unsafeRunSync() }
+  // println {
+  //   val N = 1000000
+  //   println("--- IO ---")
+  //   timed { (reify[IO] in { countDownReflect(N) }).unsafeRunSync() }
+  //   timed { (reify[IO] in { countDownReflect(N) }).unsafeRunSync() }
+  //   timed { (reify[IO] in { countDownReflect(N) }).unsafeRunSync() }
+  //   timed { (reify[IO] in { countDownReflect(N) }).unsafeRunSync() }
+  //   timed { (reify[IO] in { countDownReflect(N) }).unsafeRunSync() }
+  //   timed { (reify[IO] in { countDownReflect(N) }).unsafeRunSync() }
+  //   timed { (reify[IO] in { countDownReflect(N) }).unsafeRunSync() }
+  //   timed { (reify[IO] in { countDownReflect(N) }).unsafeRunSync() }
+  //   timed { (reify[IO] in { countDownReflect(N) }).unsafeRunSync() }
 
-    println("--- Id ---")
-    timed { (reify[Id] in { countDownReflectId(N) }) }
-    timed { (reify[Id] in { countDownReflectId(N) }) }
-    timed { (reify[Id] in { countDownReflectId(N) }) }
-    timed { (reify[Id] in { countDownReflectId(N) }) }
-    timed { (reify[Id] in { countDownReflectId(N) }) }
-    timed { (reify[Id] in { countDownReflectId(N) }) }
-    timed { (reify[Id] in { countDownReflectId(N) }) }
-    timed { (reify[Id] in { countDownReflectId(N) }) }
-    timed { (reify[Id] in { countDownReflectId(N) }) }
+  //   println("--- Id ---")
+  //   timed { (reify[Id] in { countDownReflectId(N) }) }
+  //   timed { (reify[Id] in { countDownReflectId(N) }) }
+  //   timed { (reify[Id] in { countDownReflectId(N) }) }
+  //   timed { (reify[Id] in { countDownReflectId(N) }) }
+  //   timed { (reify[Id] in { countDownReflectId(N) }) }
+  //   timed { (reify[Id] in { countDownReflectId(N) }) }
+  //   timed { (reify[Id] in { countDownReflectId(N) }) }
+  //   timed { (reify[Id] in { countDownReflectId(N) }) }
+  //   timed { (reify[Id] in { countDownReflectId(N) }) }
 
-    println("--- Nested ---")
-    // it looks like reflect is linear in the number of intermediate delimiters...
-    inline def nested = (reify [Id] in { 
-        (reify [IO] in { 
-          reify [List] in { 
-            reify [IntWriter] in { 
-              (reify [IntReader] in { 
-                countDownReflectId(N) 
-              }).run(0)
-            }
-          }
-        }).unsafeRunSync() 
-      })
-    timed { nested }
-    timed { nested }
-    timed { nested }
-    timed { nested }
-    timed { nested }
-    timed { nested }
-    timed { nested }
+  //   println("--- Nested ---")
+  //   // it looks like reflect is linear in the number of intermediate delimiters...
+  //   inline def nested = (reify [Id] in { 
+  //       (reify [IO] in { 
+  //         reify [List] in { 
+  //           reify [IntWriter] in { 
+  //             (reify [IntReader] in { 
+  //               countDownReflectId(N) 
+  //             }).run(0)
+  //           }
+  //         }
+  //       }).unsafeRunSync() 
+  //     })
+  //   timed { nested }
+  //   timed { nested }
+  //   timed { nested }
+  //   timed { nested }
+  //   timed { nested }
+  //   timed { nested }
+  //   timed { nested }
 
 
-    println("--- Baseline ---")
+  //   println("--- Baseline ---")
 
-    // obviously, this can aggressivly be optimized...
-    timed { countDownBaseline(N) }
-    timed { countDownBaseline(N) }
-    timed { countDownBaseline(N) }
-    timed { countDownBaseline(N) }
+  //   // obviously, this can aggressivly be optimized...
+  //   timed { countDownBaseline(N) }
+  //   timed { countDownBaseline(N) }
+  //   timed { countDownBaseline(N) }
+  //   timed { countDownBaseline(N) }
+  // }
+}
+
+import cats.effect.{IO, IOApp}
+
+object RateLimiter extends IOApp.Simple {
+
+  // Rate limiting example from 
+  //   https://medium.com/disney-streaming/a-rate-limiter-in-15-lines-of-code-with-cats-effect-af09d838857a
+  import cats.effect._
+  import cats.syntax.all._
+  import cats.effect.std.{ Semaphore }
+
+  import scala.concurrent.duration._
+
+  // original rate limiter code
+  def rateLimited[A, B](semaphore : Semaphore[IO], function : A => IO[B]): A => IO[B] = input =>
+    for {
+      _  <- semaphore.acquire
+      timerFiber <- IO.sleep(1.second).start
+      result <- function(input)
+      _ <- timerFiber.join
+      _  <- semaphore.release
+      } yield result
+
+  // example translated to direct style
+  def rateLimitedDirectStyle[A, B](semaphore : Semaphore[IO], function : A => B in IO): A => B in IO = input => {
+    semaphore.acquire.reflect;
+    val timerFiber = IO.sleep(1.second).start.reflect;
+    val result = function(input);
+    timerFiber.join.reflect;
+    semaphore.release.reflect;
+    result
   }
+
+  // "big" dataset
+  val myData : List[Int] = (1 to 30).toList
+
+  def process: List[String] in IO = {
+    IO { println("Starting to process!") }.reflect
+    val sem = Semaphore[IO](10).reflect
+    val limited = rateLimitedDirectStyle(sem, n => IO { println(s"hey! ${n}"); n.toString }.reflect)
+    // here we need to locally reify, since parTraverse has type:
+    //   def parTraverse[A](as: List[A])(f: A => IO[B]): IO[List[B]]
+    myData.parTraverse(n => reify[IO] in { limited(n) }).reflect
+  }
+
+  override def run: IO[Unit] = reify[IO] in { println(process) }
 }
