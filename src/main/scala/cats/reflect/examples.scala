@@ -1,6 +1,7 @@
 package cats.reflect
 
 import java.util.concurrent.Semaphore
+import scala.annotation.tailrec
 
 package object examples extends App {
 
@@ -224,6 +225,7 @@ object IOExamples extends App {
       sayHello()
   }
 
+  // IO { ... } : IO[A]
   IO { ex2() }.unsafeRunSync()
 
 }
@@ -271,4 +273,136 @@ object RateLimiter extends IOApp.Simple {
   }
 
   override def run: IO[Unit] = reify[IO] in { println(process) }
+}
+
+object InteractionExceptions extends App {
+
+  class MyExc extends Exception
+
+  import cats.data._
+  import cats.implicits._
+
+  type IntReader[A] = Reader[Int, A]
+  type IntWriter[A] = Writer[Int, A]
+
+  def read(): Int in IntReader = Reader[Int, Int] { n => n }.reflect
+  def write(n: Int): Unit in IntWriter = Writer.tell(n).reflect
+
+  val res: Int in IntReader = 
+    read() + ((throw new MyExc) : Int) + read()
+  
+
+  println("\nReader Example:")
+  
+  val m: IntReader[Int] = reify [IntReader] in { res }
+
+  // try-catch is like reify, but for exceptions
+  val opt = try { Some(m.run(2)) } catch {
+    case e: MyExc => None
+  }
+
+  println(opt)
+
+
+}
+
+object CPSExamples extends App {
+
+  type CPS[R] = [A] =>> (A => R) => R
+
+  def shift[A, R](body: (A => R) => R): CPS[R][A] = body
+
+  given [Ans] : Runner[CPS[Ans]] with
+      def pure[A](a: A) = k => k(a)
+
+      // this is very obviously NOT tail recursive...
+      def tailRecM[X, R](init: CPS[Ans][X])(f: X => Either[CPS[Ans][X], CPS[Ans][R]]): CPS[Ans][R] =
+        k => init(x => f(x) match {
+          case Left(cx) =>             
+            tailRecM(cx)(f)(k)
+          case Right(cr) => 
+            cr(k)
+        })
+
+  def noop[R](): Unit in CPS[R] = 
+    shift[Unit, R](k => k(())).reflect
+
+  def overflow[R](): Unit in CPS[R] = {
+    var i = 10000
+    while (i > 0) {
+      noop[R]();
+      i = i - 1
+    }
+  }
+
+  val cps = reify [CPS[Unit]] in {
+    overflow()
+  }
+
+  // stack overflow
+  cps(x => x)
+}
+
+object DelimitedControl extends App {
+
+    import cats.reflect.examples.control
+
+    import control.Control
+
+    given Runner[Control] with
+      def pure[A](a: A) = control.pure(a)
+
+      // Control already performs trampolining, so we don't use tailrec here.
+      // is this a problem?
+      def tailRecM[X, R](init: Control[X])(f: X => Either[Control[X], Control[R]]): Control[R] = 
+        init.flatMap { x => f(x) match {
+          case Left(cx) => tailRecM(cx)(f)
+          case Right(res) => res
+        }}
+    
+    val marker = new control.ContMarker[Unit] {}
+
+    def noop(): Unit in Control = 
+      Control.use(marker) { k => k(()) } .reflect
+
+    // now this version DOES allocate frames on the metastack
+    def noop2(): Unit in Control = 
+      Control.use(marker) { k =>
+        reify[Control] in {
+          // this is a continuation you might want to pass to someAsyncFunction...
+          val continuation = () => k(()).reflect
+          val res = continuation();
+          res
+        }
+      }.reflect
+
+    def debug(): Unit in Control = 
+      Control.printContinuation().reflect
+
+    def overflow1(i: Int): Unit in Control = {      
+      if (i > 0) {
+        noop2();
+        //debug();
+        overflow1(i - 1)
+      } else {
+        () 
+      }
+    }
+
+    def overflow2(n: Int): Unit in Control = {
+      var i = n
+      while (i > 0) {
+        noop();
+        //debug();
+        i = i - 1
+      }
+    }
+    
+    control.run { Control.delimitCont(marker) { _ => 
+      reify [Control] in { overflow1(10000) } 
+    }}
+
+    control.run { Control.delimitCont(marker) { _ => 
+      reify [Control] in { overflow2(10) } 
+    }}
 }

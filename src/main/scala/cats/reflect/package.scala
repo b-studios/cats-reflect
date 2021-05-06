@@ -25,7 +25,9 @@ package object reflect {
 
   case class ReifyBuilder[M[_]: Runner]() {
     inline def in[R](prog: R in M) = reify[M, R] { prog }
+    inline def apply[R](prog: R in M) = reify[M, R] { prog }
   }
+
 
 
   // this method is private since overloading and partially applying
