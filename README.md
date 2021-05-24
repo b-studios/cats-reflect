@@ -1,3 +1,5 @@
+> **NOTE: This project has been moved to <https://github.com/lampepfl/monadic-reflection>**
+ 
 Cats Reflect
 ============
 This project provides support for monadic reflection (Filinski [1994](https://dl.acm.org/citation.cfm?id=178047), [2010](https://dl.acm.org/citation.cfm?id=1706354))
